@@ -65,22 +65,22 @@ class SqliteOperation:
         return self.exec_sql(sql, data, mode=mode)
 
     def delete(self, table, limit=None):
-        sql = f'delete from {table} '
+        sql = f'DELETE FROM {table} '
         # 如果有限制条件就加上
         if limit: sql += limit
         return self.exec_sql(sql)
 
     def modify(self, table, keywords, data, *args, limit=''):
-        limit = f'where {limit}' if limit else ''
+        # limit = f'where {limit}' if limit else ''
         # 同上，拼接 sql 语句
-        sql = f'update {table} set {self._concat_fields(keywords, " = ?")} {limit}'
+        sql = f'UPDATE {table} SET {self._concat_fields(keywords, " = ?")} {limit}'
         return self.exec_sql(sql, data)
 
     def search(self, table, *args, field='*', limit=''):
         kw_sql = self._concat_fields(field)
         # limit = f'where {limit}' if limit else ''
         # 拼接 sql 字符串
-        sql = f'select {kw_sql} from {table} {limit}'
+        sql = f'SELECT {kw_sql} FROM {table} {limit}'
         return self.exec_sql(sql, *args)
 
     def union_search(self, table1, table2, *args, field1='*', field2='*',  limit=''):

@@ -35,6 +35,23 @@ class SearchCombobox:
                 limit='where `Name` = ?'
             )
             self.id_var.set(ids[0][0] if ids else '')
+        # search_text = '%'.join(kw)
+        # results, _ = self.db.search(
+        #     'products',
+        #     (f'%{search_text}%', ),
+        #     field='Name',
+        #     limit='where `Name` LIKE ?'
+        # )
+        # product_names = [row[0] for row in results]
+        #
+        # # 更新下拉选项
+        # self.box['values'] = product_names
+        # # 打开下拉框
+        # self.box.event_generate('<Down>')
+        # # 光标回到输入框中
+        # self.box.after(100, lambda : self.box.focus_set())
+        # # 删除编号值
+        # if self.id_var is not None: self.id_var.set('')
 
     def on_select(self, event):
         kw = self.box.get()
@@ -69,8 +86,11 @@ class SearchCombobox:
     def pack(self, *args, **kwargs):
         self.box.pack(*args, **kwargs)
 
+    def bind(self, *args, **kwargs):
+        self.box.bind(*args, **kwargs)
+
 class App:
-    def __init__(self, title="出入库管理系统"):
+    def __init__(self, title="出入库管理系统", menu_style='bar'):
         self.root = tk.Tk()
         self.root.title(title)
 
@@ -79,7 +99,7 @@ class App:
         # 禁止调整窗口大小
         self.root.resizable(False, False)
 
-        self.create_widgets()
+        self.create_widgets(menu_style=menu_style)
         self.recorder = Record(self.log_text)
         self.db = SqliteOperation("data.db", self.recorder)
         self.init_db()
@@ -94,7 +114,7 @@ class App:
         self.db.exec_sql('''
         CREATE TABLE IF NOT EXISTS in_records (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            in_time DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+            in_time DATETIME DEFAULT (datetime('now', 'localtime')) NOT NULL,
             product_id TEXT NOT NULL,
             bottles INTEGER NOT NULL,
             unit_price REAL NOT NULL,
@@ -140,7 +160,47 @@ class App:
         )
         ''')
 
-    def create_widgets(self):
+    def create_widgets(self, menu_style='bar'):
+        if menu_style == 'bar':
+            self.create_menubar()
+        else:
+            self.create_menulist()
+
+        # 创建主框架，将主框架放置在窗口顶部，填充窗口并允许扩展
+        self.main_frame = tk.Frame(self.root)
+        self.main_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+        # 创建日志框架，将日志框架放置在窗口底部，并水平填充
+        self.log_frame = tk.Frame(self.root)
+        self.log_frame.pack(side=tk.BOTTOM, fill=tk.X, padx=3, pady=5)
+
+        # 创建文本框用于日志输出，高度为 5 行，水平填充文本框
+        self.log_text = tk.Text(self.log_frame, height=5)
+        self.log_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        # 设置 Text 小部件为不可编辑
+        self.log_text.config(state='disabled')
+
+        # 创建垂直 Scrollbar 并与 Text 小部件关联
+        scrollbar = tk.Scrollbar(self.log_frame, orient='vertical', command=self.log_text.yview)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # 将 Text 小部件的 yscrollcommand 设置为 Scrollbar 的 set 方法
+        self.log_text.config(yscrollcommand=scrollbar.set)
+
+    def create_menulist(self):
+        self.menu_frame = tk.Frame(self.root)
+        self.menu_frame.pack(side=tk.LEFT, fill=tk.Y)
+
+        self.main_frame = tk.Frame(self.root)
+        self.main_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+
+        tk.Label(self.menu_frame, text="菜单", font=("Arial", 16)).pack(pady=10)
+        ttk.Button(self.menu_frame, text="主页", command=self.show_home_page).pack(pady=5)
+        ttk.Button(self.menu_frame, text="新增数据", command=self.show_add_data_page).pack(pady=5)
+        ttk.Button(self.menu_frame, text="查询数据", command=self.show_query_page).pack(pady=5)
+        ttk.Button(self.menu_frame, text="导出数据", command=self.show_export_page).pack(pady=5)
+
+    def create_menubar(self):
         # 创建菜单栏
         menubar = tk.Menu(self.root)
         # 将菜单栏配置到根窗口
@@ -170,27 +230,6 @@ class App:
         # menubar.add_cascade(label="导出", menu=export_menu)
         # export_menu.add_command(label="导出数据", command=self.show_export_page)
         menubar.add_command(label='导出数据', command=self.show_export_page)
-
-        # 创建主框架，将主框架放置在窗口顶部，填充窗口并允许扩展
-        self.main_frame = tk.Frame(self.root)
-        self.main_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-
-        # 创建日志框架，将日志框架放置在窗口底部，并水平填充
-        self.log_frame = tk.Frame(self.root)
-        self.log_frame.pack(side=tk.BOTTOM, fill=tk.X, padx=3, pady=5)
-
-        # 创建文本框用于日志输出，高度为 5 行，水平填充文本框
-        self.log_text = tk.Text(self.log_frame, height=5)
-        self.log_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        # 设置 Text 小部件为不可编辑
-        self.log_text.config(state='disabled')
-
-        # 创建垂直 Scrollbar 并与 Text 小部件关联
-        scrollbar = tk.Scrollbar(self.log_frame, orient='vertical', command=self.log_text.yview)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-
-        # 将 Text 小部件的 yscrollcommand 设置为 Scrollbar 的 set 方法
-        self.log_text.config(yscrollcommand=scrollbar.set)
 
     def log(self, message, level='info', out='log'):
         self.recorder.lock_output(message, level=level, out=out)
@@ -485,7 +524,14 @@ class App:
             if not path:
                 messagebox.showerror('错误', '请选择 Excel 文件。')
                 return
-            data = pd.read_excel(path)
+            data = pd.read_excel(
+                path,
+                header=None,
+                skiprows=1,
+                names=['id', 'name', 'num'],
+                dtype={'id': str}
+            )
+            data.dropna(subset=['name', 'num'], inplace=True)
 
             data = [
                 tuple(row) for row in data.itertuples(index=False, name=None)
@@ -653,16 +699,17 @@ class App:
 
         # 创建时间框架
         time_frame = self.init_a_row(expand=False, fill=None)
+        today = datetime.today()
         # 添加开始时间标签
         tk.Label(time_frame, text="开始时间：").pack(side=tk.LEFT, padx=5)
         # 创建开始时间选择器
-        start_time_entry = DateEntry(time_frame, date_pattern='yyyy-mm-dd')
+        start_time_entry = DateEntry(time_frame, date_pattern='yyyy-mm-dd', maxdate=today)
         # 将开始时间选择器放置在时间框架中
         start_time_entry.pack(side=tk.LEFT)
         # 添加结束时间标签
         tk.Label(time_frame, text="结束时间：").pack(side=tk.LEFT, padx=5)
         # 创建结束时间选择器
-        end_time_entry = DateEntry(time_frame, date_pattern='yyyy-mm-dd')
+        end_time_entry = DateEntry(time_frame, date_pattern='yyyy-mm-dd', maxdate=today)
         # 将结束时间选择器放置在时间框架中
         end_time_entry.pack(side=tk.LEFT)
 
@@ -674,9 +721,10 @@ class App:
                     (start_time, end_time),
                     limit=f'WHERE `{name}_time` BETWEEN ? AND ?'
                 )
-                # columns = self.db.get_column_names(table)
+
                 columns = ['', '时间', '商品编号', '数量（瓶）', '单价（瓶）', '总价', '是否结清']
                 records = pd.DataFrame(records, columns=columns)
+                records['是否结清'].map({0: '未结清', 1: '已结清'})
                 records.to_excel(os.path.join(keep_dir, f'{name}.xlsx'), index=False)
                 return True
             except Exception as e:
@@ -687,13 +735,18 @@ class App:
             path = path_var.get()
             start_time = start_time_entry.get()
             end_time = end_time_entry.get()
+            if start_time > end_time:
+                messagebox.showerror('错误', '开始时间要小于终止时间。')
+
             # 实现导出逻辑
             keep_dir = os.path.join(path, f'{start_time}-{end_time}')
             make_path_exists(keep_dir)
 
-            flag = export_one_table('in', start_time, end_time, keep_dir)
+            search_end_time = datetime.strptime(end_time, '%Y-%m-%d')
+            search_end_time = (search_end_time + timedelta(days=1)).strftime('%Y-%m-%d')
+            flag = export_one_table('in', start_time, search_end_time, keep_dir)
             if not flag: return
-            flag = export_one_table('out', start_time, end_time, keep_dir)
+            flag = export_one_table('out', start_time, search_end_time, keep_dir)
             if not flag: return
 
             messagebox.showinfo("提示", f'{start_time} 到 {end_time} 的数据已导出到 "{path}"。')
@@ -708,4 +761,4 @@ class App:
         self.root.destroy()
 
 if __name__ == "__main__":
-    app = App()
+    app = App(menu_style='list')
