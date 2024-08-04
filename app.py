@@ -13,48 +13,20 @@ from datetime import datetime, timedelta
 import pandas as pd
 from utils import SqliteOperation, Record, make_path_exists
 
-class SearchCombobox:
-    def __init__(self, root, var, db, id_var=None, width=10):
+class SearchCombobox(ttk.Combobox):
+    def __init__(self, root, db, id_var=None, **kwargs):
+        super().__init__(root, **kwargs)
         self.db = db
         self.id_var = id_var
-        self.search_var = var
-        self.box = ttk.Combobox(root, width=width, textvariable=self.search_var)
-        self.box.bind('<Return>', self.display_search_kw_results)
-        self.box.bind("<<ComboboxSelected>>", self.on_select)
-        self.search_var.trace_add("write", self.on_input)
+        self.after_id = None
+        self.bind('<KeyRelease>', self.on_input)
+        self.bind("<<ComboboxSelected>>", self.on_select)
+        self.last_text = ''
 
-    def on_input(self, *args):
-        # 获取当前输入框中的值
-        text = self.box.get()
-        self.search_var.set(text)
-        if self.id_var is not None:
-            ids, _ = self.db.search(
-                'products',
-                (text, ),
-                field='id',
-                limit='where `Name` = ?'
-            )
-            self.id_var.set(ids[0][0] if ids else '')
-        # search_text = '%'.join(kw)
-        # results, _ = self.db.search(
-        #     'products',
-        #     (f'%{search_text}%', ),
-        #     field='Name',
-        #     limit='where `Name` LIKE ?'
-        # )
-        # product_names = [row[0] for row in results]
-        #
-        # # 更新下拉选项
-        # self.box['values'] = product_names
-        # # 打开下拉框
-        # self.box.event_generate('<Down>')
-        # # 光标回到输入框中
-        # self.box.after(100, lambda : self.box.focus_set())
-        # # 删除编号值
-        # if self.id_var is not None: self.id_var.set('')
-
-    def on_select(self, event):
-        kw = self.box.get()
+    def on_select(self, *args):
+        kw = self.get()
+        self.last_text = kw
+        # 如果需要则设置编号
         if self.id_var is not None:
             ids, _ = self.db.search(
                 'products',
@@ -64,8 +36,18 @@ class SearchCombobox:
             )
             self.id_var.set(ids[0][0] if ids else '')
 
-    def display_search_kw_results(self, event):
-        kw = self.box.get()
+    def on_input(self, *args):
+        text = self.get()
+        # 等待用户输入新关键词
+        if not text or text == self.last_text:
+            self.event_generate('<Escape>')
+            if self.after_id: self.after_cancel(self.after_id)
+            return
+        self.after_id = self.after(500, self.show_suggestions)
+
+    def show_suggestions(self):
+        kw = self.get()
+        self.last_text = kw
         search_text = '%'.join(kw)
         results, _ = self.db.search(
             'products',
@@ -75,19 +57,18 @@ class SearchCombobox:
         )
         product_names = [row[0] for row in results]
         # 保持用户输入
-        self.search_var.set(kw)
+        self.set(kw)
         # 更新下拉选项
-        event.widget['values'] = product_names
+        self.configure(values=product_names)
         # 打开下拉框
-        event.widget.event_generate('<Down>')
+        self.event_generate('<Down>')
         # 删除编号值
-        if self.id_var is not None: self.id_var.set('')
+        if self.id_var is not None:
+            self.id_var.set('')
 
-    def pack(self, *args, **kwargs):
-        self.box.pack(*args, **kwargs)
-
-    def bind(self, *args, **kwargs):
-        self.box.bind(*args, **kwargs)
+    def bind_return(self, *args, **kwargs):
+        self.on_select()
+        self.bind('<Return>', *args, **kwargs)
 
 class App:
     def __init__(self, title="出入库管理系统", menu_style='bar'):
@@ -168,7 +149,7 @@ class App:
 
         # 创建主框架，将主框架放置在窗口顶部，填充窗口并允许扩展
         self.main_frame = tk.Frame(self.root)
-        self.main_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        self.main_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, pady=5)
 
         # 创建日志框架，将日志框架放置在窗口底部，并水平填充
         self.log_frame = tk.Frame(self.root)
@@ -189,16 +170,13 @@ class App:
 
     def create_menulist(self):
         self.menu_frame = tk.Frame(self.root)
-        self.menu_frame.pack(side=tk.LEFT, fill=tk.Y)
+        self.menu_frame.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=10)
 
-        self.main_frame = tk.Frame(self.root)
-        self.main_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
-
-        tk.Label(self.menu_frame, text="菜单", font=("Arial", 16)).pack(pady=10)
-        ttk.Button(self.menu_frame, text="主页", command=self.show_home_page).pack(pady=5)
-        ttk.Button(self.menu_frame, text="新增数据", command=self.show_add_data_page).pack(pady=5)
-        ttk.Button(self.menu_frame, text="查询数据", command=self.show_query_page).pack(pady=5)
-        ttk.Button(self.menu_frame, text="导出数据", command=self.show_export_page).pack(pady=5)
+        tk.Label(self.menu_frame, text="菜单", font=("Arial", 16)).pack(padx=5, pady=10)
+        ttk.Button(self.menu_frame, text="主\n页", command=self.show_home_page).pack(padx=5, pady=5)
+        ttk.Button(self.menu_frame, text="新增\n数据", command=self.show_add_data_page).pack(padx=5, pady=5)
+        ttk.Button(self.menu_frame, text="查询\n数据", command=self.show_query_page).pack(padx=5, pady=5)
+        ttk.Button(self.menu_frame, text="导出\n数据", command=self.show_export_page).pack(padx=5, pady=5)
 
     def create_menubar(self):
         # 创建菜单栏
@@ -310,7 +288,6 @@ class App:
             '商品名称': tk.StringVar(),
             '数量': tk.IntVar(),
             '单价': tk.DoubleVar(),
-            # '总价': tk.DoubleVar(),
         } if not hasattr(self, 'entries') else self.entries
 
         # 创建一个行框架
@@ -320,13 +297,10 @@ class App:
             tk.Label(row, width=15, text=field, anchor='w').pack(side=tk.LEFT)
 
             if i == 1:
-                # self.search_var = tk.StringVar()
-                # entry = ttk.Combobox(row)
-                # entry.pack(side=tk.RIGHT, expand=tk.YES, fill=tk.X)
-                # entry.bind('<KeyRelease>', lambda *args: self.display_search_kw_results(entry, *args))
                 id_var = self.entries.get('商品编号')
-                entry = SearchCombobox(row, var, self.db, id_var)
+                entry = SearchCombobox(row, self.db, id_var)
                 entry.pack(side=tk.RIGHT, expand=tk.YES, fill=tk.X)
+                self.entries['商品名称'] = entry
             else:
                 entry = tk.Entry(row, textvariable=var)
                 if i == 2:
@@ -599,8 +573,7 @@ class App:
         search_frame.pack(pady=10)
         tk.Label(search_frame, text="关键词：").pack(side=tk.LEFT)
 
-        search_var = tk.StringVar()
-        box = SearchCombobox(search_frame, search_var, self.db, width=50)
+        box = SearchCombobox(search_frame, self.db, width=50)
         box.pack(side=tk.LEFT)
 
         search_button = tk.Button(search_frame, text="搜索")
@@ -632,7 +605,7 @@ class App:
         tree.configure(xscrollcommand=h_scrollbar.set, yscrollcommand=v_scrollbar.set)
 
         def search_data():
-            kw = search_var.get()
+            kw = box.get()
             product_id, _ = self.db.search(
                 'products',
                 (kw, kw),
@@ -640,7 +613,7 @@ class App:
                 limit='where `id` = ? or `Name` = ?'
             )
             if not product_id:
-                messagebox.showerror('错误', '未找到数据。')
+                messagebox.showerror('错误', '未找到商品。')
                 return
             result, _ = self.db.union_search(
                 'in_records',
