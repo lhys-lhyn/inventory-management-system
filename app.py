@@ -36,6 +36,10 @@ class SearchCombobox(ttk.Combobox):
                 limit='where `Name` = ?'
             )
             self.id_var.set(ids[0][0] if ids else '')
+        if hasattr(self, 'select_func'): self.select_func()
+
+    def set_select_func(self, func):
+        self.select_func = func
 
     def on_input(self, *args):
         text = self.get()
@@ -277,6 +281,14 @@ class App:
         row.pack(side=side, fill=fill, expand=expand, padx=5, pady=10)
         return row
 
+    def focus_next_widget(self, event):
+        event.widget.tk_focusNext().focus()
+
+    def on_focus_in(self, event):
+        # 当输入框获得焦点时，清空默认的 "0"
+        if eval(event.widget.get()) == 0:
+            event.widget.delete(0, tk.END)
+
     def show_add_data_page(self):
         # 清除主框架中的所有小部件
         for widget in self.main_frame.winfo_children():
@@ -303,9 +315,12 @@ class App:
                 id_var = self.entries.get('商品编号')
                 entry = SearchCombobox(row, self.db, id_var)
                 entry.pack(side=tk.RIGHT, expand=tk.YES, fill=tk.X)
+                entry.bind_return(self.focus_next_widget)
                 self.entries['商品名称'] = entry
             else:
                 entry = tk.Entry(row, textvariable=var)
+                entry.bind("<FocusIn>", self.on_focus_in)
+                entry.bind('<Return>', self.focus_next_widget)
                 if i == 2:
                     entry.pack(side=tk.LEFT, expand=tk.YES, fill=tk.X, padx=3)
                     self.unit_var = tk.StringVar()
@@ -314,6 +329,7 @@ class App:
                     box.pack(side=tk.RIGHT, expand=tk.YES, fill=tk.X)
                     # 打开下拉框
                     box.event_generate('<Down>')
+                    box.bind('<Return>', self.focus_next_widget)
                 else:
                     entry.pack(side=tk.RIGHT, expand=tk.YES, fill=tk.X)
 
@@ -551,6 +567,11 @@ class App:
         unit_entry.pack(pady=5)
         unit_entry.insert(0, '1')
 
+        map(
+            lambda widget: widget.bind('<Return>', self.focus_next_widget),
+            [product_id_entry, product_name_entry, unit_entry]
+        )
+
         def save():
             product_id = product_id_entry.get()
             product_name = product_name_entry.get()
@@ -607,25 +628,33 @@ class App:
         tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         tree.configure(xscrollcommand=h_scrollbar.set, yscrollcommand=v_scrollbar.set)
 
-        def search_data():
+        def search_data(*args):
             kw = box.get()
-            product_id, _ = self.db.search(
-                'products',
-                (kw, kw),
-                field='id',
-                limit='where `id` = ? or `Name` = ?'
-            )
-            if not product_id:
-                messagebox.showerror('错误', '未找到商品。')
-                return
-            result, _ = self.db.union_search(
-                'in_records',
-                'out_records',
-                (product_id[0][0], product_id[0][0]),
-                field1='*, 1',
-                field2='*, -1',
-                limit='where `product_id` = ?'
-            )
+            if not kw:
+                result, _ = self.db.union_search(
+                    'in_records',
+                    'out_records',
+                    field1='*, 1',
+                    field2='*, -1'
+                )
+            else:
+                product_id, _ = self.db.search(
+                    'products',
+                    (kw, kw),
+                    field='id',
+                    limit='where `id` = ? or `Name` = ?'
+                )
+                if not product_id:
+                    messagebox.showerror('错误', '未找到商品。')
+                    return
+                result, _ = self.db.union_search(
+                    'in_records',
+                    'out_records',
+                    (product_id[0][0], product_id[0][0]),
+                    field1='*, 1',
+                    field2='*, -1',
+                    limit='where `product_id` = ?'
+                )
             columns = self.db.get_column_names('in_records')
             columns[1] = 'time'
             columns.append('weight')
@@ -652,7 +681,10 @@ class App:
                 row[-1] = '已结清' if row[-1] else '未结清'
                 tree.insert("", "end", values=row)
 
+        box.set_select_func(search_data)
+        box.bind_return(search_data)
         search_button['command'] = search_data
+        search_data()
 
     def show_export_page(self):
         for widget in self.main_frame.winfo_children():
