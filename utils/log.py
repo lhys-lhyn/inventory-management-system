@@ -3,15 +3,17 @@
 # Author: lhys
 # File  : log.py
 
-import time
 import logging
+import time
 import tkinter as tk
-from threading import Lock
 from collections.abc import Iterable
+from threading import Lock
+from tkinter import messagebox
+
 
 class Record:
 
-    def __init__(self, log_text, log_file='process.log'):
+    def __init__(self, log_text=None, log_file='process.log'):
         logging.basicConfig(
             filename=log_file,
             filemode='w',
@@ -54,10 +56,11 @@ class Record:
     def lock_print(self, msg, out=None):
         if out is not None:
             out.write(msg)
-        self.log_text.config(state='normal')
-        self.log_text.insert(tk.END, msg + "\n")
-        self.log_text.see(tk.END)
-        self.log_text.config(state='disabled')
+        if self.log_text is not None:
+            self.log_text.config(state='normal')
+            self.log_text.insert(tk.END, msg + "\n")
+            self.log_text.see(tk.END)
+            self.log_text.config(state='disabled')
 
     def lock_output(self, *msg, level='info', out='log', msg_extract=True):
         with self.lock:
@@ -68,7 +71,7 @@ class Record:
             if 'text' in out or 'all' in out:
                 self.lock_print(msg)
             if level == 'error':
-                tk.messagebox.showerror('错误', msg)
+                messagebox.showerror('错误', msg)
 
     def LogWrapper(self, retry=True, pop_up=False):
         def wrapper(func):
@@ -84,7 +87,7 @@ class Record:
                                          f'func: {func.__name__}, args:{args}, kwargs: {kwargs}, message: {message}',
                                          level='error', out='all')
                         if pop_up:
-                            tk.messagebox.showerror('错误', '程序出了一些错误，请查看日志文件。')
+                            messagebox.showerror('错误', '程序出了一些错误，请查看日志文件。')
 
             return inner
 

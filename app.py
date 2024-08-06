@@ -5,13 +5,14 @@
 
 import os
 import tkinter as tk
-from tkcalendar import DateEntry
+from datetime import datetime, timedelta
 from tkinter import ttk, messagebox, filedialog
 
-from datetime import datetime, timedelta
-
 import pandas as pd
+from tkcalendar import DateEntry
+
 from utils import SqliteOperation, Record, make_path_exists
+
 
 class SearchCombobox(ttk.Combobox):
     def __init__(self, root, db, id_var=None, **kwargs):
@@ -43,7 +44,7 @@ class SearchCombobox(ttk.Combobox):
             self.event_generate('<Escape>')
             if self.after_id: self.after_cancel(self.after_id)
             return
-        self.after_id = self.after(500, self.show_suggestions)
+        self.after_id = self.after(300, self.show_suggestions)
 
     def show_suggestions(self):
         kw = self.get()
@@ -108,7 +109,7 @@ class App:
         self.db.exec_sql('''
         CREATE TABLE IF NOT EXISTS out_records (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            out_time DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+            out_time DATETIME DEFAULT (datetime('now', 'localtime')) NOT NULL,
             product_id TEXT NOT NULL,
             bottles INTEGER NOT NULL,
             unit_price REAL NOT NULL,
@@ -174,7 +175,9 @@ class App:
 
         tk.Label(self.menu_frame, text="菜单", font=("Arial", 16)).pack(padx=5, pady=10)
         ttk.Button(self.menu_frame, text="主\n页", command=self.show_home_page).pack(padx=5, pady=5)
-        ttk.Button(self.menu_frame, text="新增\n数据", command=self.show_add_data_page).pack(padx=5, pady=5)
+        ttk.Button(self.menu_frame, text="新   增\n出入库\n数   据", command=self.show_add_data_page).pack(padx=5,
+                                                                                                           pady=5)
+        ttk.Button(self.menu_frame, text="新增\n商品\n数据", command=self.show_add_product_batches).pack(padx=5, pady=5)
         ttk.Button(self.menu_frame, text="查询\n数据", command=self.show_query_page).pack(padx=5, pady=5)
         ttk.Button(self.menu_frame, text="导出\n数据", command=self.show_export_page).pack(padx=5, pady=5)
 
@@ -245,7 +248,7 @@ class App:
             # 获取今天的日期
             today = datetime.today().date()
             # 最近一周的日期
-            date_range = pd.date_range(start=today - timedelta(days=8), end=today - timedelta(days=1), freq='D').to_series().dt.date
+            date_range = pd.date_range(start=today - timedelta(days=7), end=today, freq='D').to_series().dt.date
             recent_week_profit = pd.Series(index=date_range, dtype=float, name='profit')
             # 过滤出最近一周的数据
             recent_week_profit.update(count[count['day'].isin(date_range)].groupby('day')['profit'].sum())
@@ -288,7 +291,7 @@ class App:
             '商品名称': tk.StringVar(),
             '数量': tk.IntVar(),
             '单价': tk.DoubleVar(),
-        } if not hasattr(self, 'entries') else self.entries
+        } if not hasattr(self, 'entries') else getattr(self, 'entries')
 
         # 创建一个行框架
         for i, (field, var) in enumerate(self.entries.items()):
@@ -341,7 +344,7 @@ class App:
         # 添加保存按钮
         ttk.Button(row, text="保存", command=self.save_data).pack(pady=20)
 
-    def get_statistics(self, start=None, end=datetime.today().strftime('%Y-%m-%d')):
+    def get_statistics(self, start=None, end=(datetime.today() + timedelta(days=1)).strftime('%Y-%m-%d')):
         if not start:
             result, _ = self.db.search('statistics', field='MIN(day)')
             start = result[0][0]
@@ -626,7 +629,7 @@ class App:
             columns = self.db.get_column_names('in_records')
             columns[1] = 'time'
             columns.append('weight')
-            result = pd.DataFrame(result, columns=columns)
+            result = pd.DataFrame(result, columns=columns).round(2)
             result.drop('id', axis=1)
             result = result.sort_values(by=['time'], ascending=False)
             result['bottles'] = result['bottles'] * result['weight']
